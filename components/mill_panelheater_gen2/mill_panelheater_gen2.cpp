@@ -24,7 +24,6 @@ void MillPanelHeaterGen2::dump_config() {
   if (this->power_sensor_ != nullptr) {
     ESP_LOGCONFIG(TAG, "  Rated power: %.0f W", this->rated_power_);
   }
-  this->check_uart_settings(9600);
 }
 
 void MillPanelHeaterGen2::loop() {
