@@ -11,6 +11,13 @@
 
 namespace esphome::mill_panelheater_gen2 {
 
+enum RestoreMode : uint8_t {
+  NO_RESTORE,
+  RESTORE,
+  ALWAYS_OFF,
+  ALWAYS_ON,
+};
+
 class MillPanelHeaterGen2 : public climate::Climate, public Component, public uart::UARTDevice {
  public:
   void setup() override;
@@ -18,6 +25,7 @@ class MillPanelHeaterGen2 : public climate::Climate, public Component, public ua
   void control(const climate::ClimateCall &call) override;
   void dump_config() override;
 
+  void set_restore_mode(RestoreMode restore_mode) { this->restore_mode_ = restore_mode; }
   void set_power_sensor(sensor::Sensor *power_sensor) { this->power_sensor_ = power_sensor; }
   void set_rated_power(float rated_power) { this->rated_power_ = rated_power; }
 
@@ -74,6 +82,7 @@ class MillPanelHeaterGen2 : public climate::Climate, public Component, public ua
 
   sensor::Sensor *power_sensor_{nullptr};
   float rated_power_{0.0f};
+  RestoreMode restore_mode_{NO_RESTORE};
 };
 
 }  // namespace esphome::mill_panelheater_gen2

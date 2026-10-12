@@ -19,6 +19,14 @@ mill_panelheater_gen2_ns = cg.esphome_ns.namespace("mill_panelheater_gen2")
 MillPanelHeaterGen2 = mill_panelheater_gen2_ns.class_(
     "MillPanelHeaterGen2", climate.Climate, cg.Component, uart.UARTDevice
 )
+RestoreMode = mill_panelheater_gen2_ns.enum("RestoreMode")
+
+RESTORE_MODES = {
+    "NO_RESTORE": RestoreMode.NO_RESTORE,
+    "RESTORE": RestoreMode.RESTORE,
+    "ALWAYS_OFF": RestoreMode.ALWAYS_OFF,
+    "ALWAYS_ON": RestoreMode.ALWAYS_ON,
+}
 
 
 def validate_power_sensor(config):
@@ -34,6 +42,7 @@ CONFIG_SCHEMA = cv.All(
     .extend(
         {
             cv.Optional(CONF_RATED_POWER): cv.positive_not_null_float,
+            cv.Optional("restore_mode", default="NO_RESTORE"): cv.enum(RESTORE_MODES, upper=True),
             cv.Optional(CONF_POWER): sensor.sensor_schema(
                 unit_of_measurement=UNIT_WATT,
                 accuracy_decimals=0,
@@ -62,6 +71,7 @@ async def to_code(config):
     var = await climate.new_climate(config)
     await cg.register_component(var, config)
     await uart.register_uart_device(var, config)
+    cg.add(var.set_restore_mode(config["restore_mode"]))
 
     if CONF_POWER in config:
         power_sensor = await sensor.new_sensor(config[CONF_POWER])

@@ -67,7 +67,17 @@ climate:
   - platform: mill_panelheater_gen2
     name: Mill Panel Heater
     uart_id: uart_bus
+    restore_mode: RESTORE
 ```
+
+`restore_mode` controls the command sent when ESPHome starts. It defaults to `NO_RESTORE`.
+
+- `NO_RESTORE`: Do not send a power command during startup.
+- `RESTORE`: Restore the last saved climate mode and target temperature, if ESPHome has saved a state.
+- `ALWAYS_OFF`: Send a power-off command during startup.
+- `ALWAYS_ON`: Send a heat-mode power-on command during startup; the heater retains its configured target temperature.
+
+ESPHome saves climate state as status frames are received. `RESTORE` can therefore fall back to no startup command if no climate state has previously been saved. Commands are not reflected as confirmed climate state until the heater reports a status frame.
 
 ## Estimated power sensor
 
@@ -97,7 +107,6 @@ The sensor publishes `rated_power` while the reported action is heating and `0 W
 
 ## Known limitations
 
-- `restore_mode` is not implemented yet.
 - Temperatures are handled at one-degree protocol resolution.
 - The power sensor is estimated from the configured rated power; there is no real-time power measurement.
 - The implementation supports the observed Gen2 protocol frames only. Other Mill models, hardware revisions, or firmware versions may use different frames.

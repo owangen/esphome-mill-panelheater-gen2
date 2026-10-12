@@ -15,6 +15,36 @@ static const char *const TAG = "mill_panelheater_gen2.climate";
 void MillPanelHeaterGen2::setup() {
   ESP_LOGD(TAG, "MillPanelHeaterGen2 initialization...");
   this->reset_communication_timeout_();
+
+  switch (this->restore_mode_) {
+    case NO_RESTORE:
+      ESP_LOGD(TAG, "Restore mode: NO_RESTORE");
+      break;
+    case RESTORE: {
+      ESP_LOGD(TAG, "Restore mode: RESTORE");
+      auto restore = this->restore_state_();
+      if (restore.has_value()) {
+        restore->to_call(this).perform();
+      } else {
+        ESP_LOGD(TAG, "No previously saved climate state to restore");
+      }
+      break;
+    }
+    case ALWAYS_OFF: {
+      ESP_LOGD(TAG, "Restore mode: ALWAYS_OFF");
+      auto call = this->make_call();
+      call.set_mode(climate::CLIMATE_MODE_OFF);
+      call.perform();
+      break;
+    }
+    case ALWAYS_ON: {
+      ESP_LOGD(TAG, "Restore mode: ALWAYS_ON");
+      auto call = this->make_call();
+      call.set_mode(climate::CLIMATE_MODE_HEAT);
+      call.perform();
+      break;
+    }
+  }
 }
 
 void MillPanelHeaterGen2::dump_config() {
