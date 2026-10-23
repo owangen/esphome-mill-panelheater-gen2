@@ -34,10 +34,11 @@ void MillPanelHeaterGen2::setup() {
       if (restore.has_value()) {
         if (restore->mode == climate::CLIMATE_MODE_OFF || restore->mode == climate::CLIMATE_MODE_HEAT) {
           this->startup_mode_ = restore->mode;
-          if (std::isfinite(restore->target_temperature) &&
-              restore->target_temperature >= MIN_TARGET_TEMPERATURE &&
-              restore->target_temperature <= MAX_TARGET_TEMPERATURE) {
-            this->startup_target_temperature_ = restore->target_temperature;
+          const float restored_target_temperature = restore->target_temperature;
+          if (std::isfinite(restored_target_temperature) &&
+              restored_target_temperature >= MIN_TARGET_TEMPERATURE &&
+              restored_target_temperature <= MAX_TARGET_TEMPERATURE) {
+            this->startup_target_temperature_ = restored_target_temperature;
           }
           this->startup_command_pending_ = true;
         } else {
@@ -66,7 +67,7 @@ void MillPanelHeaterGen2::setup() {
 
 RestoreMode RestoreModeSelect::load() {
   static constexpr uint32_t PREFERENCE_VERSION = 0x4D5A0201UL;
-  this->preference_ = this->make_entity_preference<uint8_t>(PREFERENCE_VERSION, true);
+  this->preference_ = this->make_entity_preference<uint8_t>(PREFERENCE_VERSION);
   uint8_t selected = static_cast<uint8_t>(NO_RESTORE);
   if (!this->preference_.load(&selected) || selected > static_cast<uint8_t>(ALWAYS_ON)) {
     selected = static_cast<uint8_t>(NO_RESTORE);
