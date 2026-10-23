@@ -40,6 +40,9 @@ void MillPanelHeaterGen2::setup() {
               restored_target_temperature <= MAX_TARGET_TEMPERATURE) {
             this->startup_target_temperature_ = restored_target_temperature;
           }
+          ESP_LOGI(TAG, "Loaded saved climate state: mode=%s, target=%.1f C",
+                   LOG_STR_ARG(climate::climate_mode_to_string(*this->startup_mode_)),
+                   restored_target_temperature);
           this->startup_command_pending_ = true;
         } else {
           ESP_LOGW(TAG, "Saved climate mode is unsupported; skipping startup restore");
@@ -87,6 +90,9 @@ void RestoreModeSelect::control(size_t index) {
   const auto mode = static_cast<RestoreMode>(index);
   const uint8_t stored = static_cast<uint8_t>(mode);
   this->preference_.save(&stored);
+  if (global_preferences != nullptr && !global_preferences->sync()) {
+    ESP_LOGW(TAG, "Could not immediately persist restore mode selection");
+  }
   this->publish_state(index);
   this->parent_->set_restore_mode(mode);
 }
@@ -358,14 +364,21 @@ void MillPanelHeaterGen2::control(const climate::ClimateCall &call) {
              static_cast<unsigned>(MIN_TARGET_TEMPERATURE), static_cast<unsigned>(MAX_TARGET_TEMPERATURE));
   }
 
+  bool state_changed = false;
   if (requested_mode.has_value()) {
     switch (*requested_mode) {
       case climate::CLIMATE_MODE_OFF:
         this->send_power_command_(PROTOCOL_MODE_OFF);
+        this->mode = climate::CLIMATE_MODE_OFF;
+        this->action = climate::CLIMATE_ACTION_OFF;
+        state_changed = true;
         ESP_LOGD(TAG, "Mode command sent; awaiting C9 status confirmation");
         break;
       case climate::CLIMATE_MODE_HEAT:
         this->send_power_command_(PROTOCOL_MODE_HEAT);
+        this->mode = climate::CLIMATE_MODE_HEAT;
+        this->action = climate::CLIMATE_ACTION_IDLE;
+        state_changed = true;
         ESP_LOGD(TAG, "Mode command sent; awaiting C9 status confirmation");
         break;
       default:
@@ -377,7 +390,18 @@ void MillPanelHeaterGen2::control(const climate::ClimateCall &call) {
   if (requested_target_temperature.has_value() && target_temperature_is_valid) {
     const auto temperature = static_cast<uint8_t>(roundf(*requested_target_temperature));
     this->send_temperature_command_(temperature);
+    this->target_temperature = temperature;
+    state_changed = true;
     ESP_LOGD(TAG, "Temperature command sent; awaiting C9 status confirmation");
+  }
+
+  // Persist the requested climate state immediately. A hard power loss can occur before the
+  // heater's next status frame or ESPHome's normal preference sync.
+  if (state_changed) {
+    this->publish_state();
+    if (global_preferences != nullptr && !global_preferences->sync()) {
+      ESP_LOGW(TAG, "Could not immediately persist requested climate state");
+    }
   }
 }
 
