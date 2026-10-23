@@ -67,7 +67,6 @@ climate:
   - platform: mill_panelheater_gen2
     name: Mill Panel Heater
     uart_id: uart_bus
-    uart_id: uart_bus
 ```
 
 The component creates a Home Assistant select entity named **Mill Panel Heater Restore Mode**. It defaults to `NO_RESTORE`, and the selected policy is stored on the ESP device.
