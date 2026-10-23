@@ -16,6 +16,14 @@ void MillPanelHeaterGen2::setup() {
   ESP_LOGD(TAG, "MillPanelHeaterGen2 initialization...");
   this->reset_communication_timeout_();
 
+  if (this->restore_mode_select_ != nullptr) {
+    this->restore_mode_ = this->restore_mode_select_->load();
+  }
+
+  this->startup_command_pending_ = false;
+  this->startup_mode_.reset();
+  this->startup_target_temperature_.reset();
+
   switch (this->restore_mode_) {
     case NO_RESTORE:
       ESP_LOGD(TAG, "Restore mode: NO_RESTORE");
@@ -24,27 +32,62 @@ void MillPanelHeaterGen2::setup() {
       ESP_LOGD(TAG, "Restore mode: RESTORE");
       auto restore = this->restore_state_();
       if (restore.has_value()) {
-        restore->to_call(this).perform();
+        if (restore->mode == climate::CLIMATE_MODE_OFF || restore->mode == climate::CLIMATE_MODE_HEAT) {
+          this->startup_mode_ = restore->mode;
+          if (std::isfinite(restore->target_temperature) &&
+              restore->target_temperature >= MIN_TARGET_TEMPERATURE &&
+              restore->target_temperature <= MAX_TARGET_TEMPERATURE) {
+            this->startup_target_temperature_ = restore->target_temperature;
+          }
+          this->startup_command_pending_ = true;
+        } else {
+          ESP_LOGW(TAG, "Saved climate mode is unsupported; skipping startup restore");
+        }
       } else {
         ESP_LOGD(TAG, "No previously saved climate state to restore");
       }
       break;
     }
-    case ALWAYS_OFF: {
+    case ALWAYS_OFF:
       ESP_LOGD(TAG, "Restore mode: ALWAYS_OFF");
-      auto call = this->make_call();
-      call.set_mode(climate::CLIMATE_MODE_OFF);
-      call.perform();
+      this->startup_mode_ = climate::CLIMATE_MODE_OFF;
+      this->startup_command_pending_ = true;
       break;
-    }
-    case ALWAYS_ON: {
+    case ALWAYS_ON:
       ESP_LOGD(TAG, "Restore mode: ALWAYS_ON");
-      auto call = this->make_call();
-      call.set_mode(climate::CLIMATE_MODE_HEAT);
-      call.perform();
+      this->startup_mode_ = climate::CLIMATE_MODE_HEAT;
+      this->startup_command_pending_ = true;
       break;
-    }
   }
+  if (this->startup_command_pending_) {
+    ESP_LOGD(TAG, "Startup command queued until the first valid heater status frame");
+  }
+}
+
+RestoreMode RestoreModeSelect::load() {
+  static constexpr uint32_t PREFERENCE_VERSION = 0x4D5A0201UL;
+  this->preference_ = this->make_entity_preference<uint8_t>(PREFERENCE_VERSION);
+  uint8_t selected = static_cast<uint8_t>(NO_RESTORE);
+  if (!this->preference_.load(&selected) || selected > static_cast<uint8_t>(ALWAYS_ON)) {
+    selected = static_cast<uint8_t>(NO_RESTORE);
+    ESP_LOGD(TAG, "Using default restore mode: NO_RESTORE");
+  } else {
+    ESP_LOGD(TAG, "Loaded restore mode selection index %u", static_cast<unsigned>(selected));
+  }
+  this->publish_state(selected);
+  return static_cast<RestoreMode>(selected);
+}
+
+void RestoreModeSelect::control(size_t index) {
+  if (index > static_cast<size_t>(ALWAYS_ON) || this->parent_ == nullptr) {
+    ESP_LOGW(TAG, "Ignoring invalid restore mode selection index %u", static_cast<unsigned>(index));
+    return;
+  }
+  const auto mode = static_cast<RestoreMode>(index);
+  const uint8_t stored = static_cast<uint8_t>(mode);
+  this->preference_.save(&stored);
+  this->publish_state(index);
+  this->parent_->set_restore_mode(mode);
 }
 
 void MillPanelHeaterGen2::dump_config() {
@@ -130,6 +173,19 @@ void MillPanelHeaterGen2::loop() {
            LOG_STR_ARG(climate::climate_mode_to_string(this->mode)),
            LOG_STR_ARG(climate::climate_action_to_string(this->action)));
   this->publish_state();
+
+  if (this->startup_command_pending_) {
+    this->startup_command_pending_ = false;
+    auto call = this->make_call();
+    if (this->startup_mode_.has_value()) {
+      call.set_mode(*this->startup_mode_);
+    }
+    if (this->startup_target_temperature_.has_value()) {
+      call.set_target_temperature(*this->startup_target_temperature_);
+    }
+    ESP_LOGI(TAG, "Sending queued startup restore command after first valid status frame");
+    call.perform();
+  }
   // Keep periodic power samples: integration sensors use each source update as an integration timestamp.
   this->publish_power_state_();
 }
