@@ -36,13 +36,21 @@ TEST(MillPanelHeaterGen2Test, NoRestoreDoesNotSendCommandsOnSetup) {
   EXPECT_TRUE(uart.tx.empty());
 }
 
-TEST(MillPanelHeaterGen2Test, AlwaysOffSendsPowerOffOnSetup) {
+TEST(MillPanelHeaterGen2Test, AlwaysOffWaitsForFirstValidStatusFrame) {
   MockUARTComponent uart;
   TestableMillPanelHeaterGen2 heater;
   heater.set_uart_parent(&uart);
   heater.set_restore_mode(ALWAYS_OFF);
 
   heater.setup();
+  EXPECT_TRUE(uart.tx.empty());
+
+  uart.rx = {
+      0x5A, 0x00, 0x11, 0x00, 0x00, 0xC9, 0x00, 0x05, 0x14, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0xF4, 0x5B,
+  };
+  while (uart.available() != 0) {
+    heater.loop();
+  }
 
   const std::vector<uint8_t> expected{
       0x5A, 0x00, 0x10, 0x06, 0x00, 0x47, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x5D, 0x5B,
@@ -50,13 +58,21 @@ TEST(MillPanelHeaterGen2Test, AlwaysOffSendsPowerOffOnSetup) {
   EXPECT_EQ(uart.tx, expected);
 }
 
-TEST(MillPanelHeaterGen2Test, AlwaysOnSendsPowerOnOnSetup) {
+TEST(MillPanelHeaterGen2Test, AlwaysOnWaitsForFirstValidStatusFrame) {
   MockUARTComponent uart;
   TestableMillPanelHeaterGen2 heater;
   heater.set_uart_parent(&uart);
   heater.set_restore_mode(ALWAYS_ON);
 
   heater.setup();
+  EXPECT_TRUE(uart.tx.empty());
+
+  uart.rx = {
+      0x5A, 0x00, 0x11, 0x00, 0x00, 0xC9, 0x00, 0x05, 0x14, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0xF4, 0x5B,
+  };
+  while (uart.available() != 0) {
+    heater.loop();
+  }
 
   const std::vector<uint8_t> expected{
       0x5A, 0x00, 0x10, 0x06, 0x00, 0x47, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x5E, 0x5B,
