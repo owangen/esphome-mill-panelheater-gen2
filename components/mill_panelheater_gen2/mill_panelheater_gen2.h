@@ -6,6 +6,7 @@
 
 #include "esphome/components/climate/climate.h"
 #include "esphome/components/sensor/sensor.h"
+#include "esphome/components/select/select.h"
 #include "esphome/components/uart/uart.h"
 #include "esphome/core/component.h"
 
@@ -18,6 +19,21 @@ enum RestoreMode : uint8_t {
   ALWAYS_ON,
 };
 
+class MillPanelHeaterGen2;
+
+class RestoreModeSelect : public select::Select {
+ public:
+  void set_parent(MillPanelHeaterGen2 *parent) { this->parent_ = parent; }
+  RestoreMode load();
+
+ protected:
+  void control(size_t index) override;
+
+ private:
+  MillPanelHeaterGen2 *parent_{nullptr};
+  ESPPreferenceObject preference_;
+};
+
 class MillPanelHeaterGen2 : public climate::Climate, public Component, public uart::UARTDevice {
  public:
   void setup() override;
@@ -26,6 +42,7 @@ class MillPanelHeaterGen2 : public climate::Climate, public Component, public ua
   void dump_config() override;
 
   void set_restore_mode(RestoreMode restore_mode) { this->restore_mode_ = restore_mode; }
+  void set_restore_mode_select(RestoreModeSelect *restore_mode_select) { this->restore_mode_select_ = restore_mode_select; }
   void set_power_sensor(sensor::Sensor *power_sensor) { this->power_sensor_ = power_sensor; }
   void set_rated_power(float rated_power) { this->rated_power_ = rated_power; }
 
@@ -83,6 +100,10 @@ class MillPanelHeaterGen2 : public climate::Climate, public Component, public ua
   sensor::Sensor *power_sensor_{nullptr};
   float rated_power_{0.0f};
   RestoreMode restore_mode_{NO_RESTORE};
+  RestoreModeSelect *restore_mode_select_{nullptr};
+  bool startup_command_pending_{false};
+  optional<climate::ClimateMode> startup_mode_;
+  optional<float> startup_target_temperature_;
 };
 
 }  // namespace esphome::mill_panelheater_gen2
