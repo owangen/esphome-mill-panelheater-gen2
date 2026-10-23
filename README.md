@@ -86,7 +86,7 @@ Add `restore_from_flash: true` to the existing `esp8266:` block; do not add a se
 - `ALWAYS_OFF`: Send an off command after the first valid heater status frame.
 - `ALWAYS_ON`: Send a heat-mode command after the first valid heater status frame; the heater retains its configured target temperature.
 
-Startup commands wait until the heater has sent a valid status frame, so the UART link is known to be active. The climate entity continues to report heater-confirmed state. If `RESTORE` has no saved climate state, no startup command is sent.
+Startup commands wait until the heater has sent a valid status frame, so the UART link is known to be active. Climate commands are saved immediately as the desired state; the following UART status frames report the heater-confirmed state. This preserves a just-requested mode or temperature even if power is lost before the next heater update. If `RESTORE` has no saved climate state, no startup command is sent.
 
 ## Estimated power sensor
 
