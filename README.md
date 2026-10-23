@@ -67,17 +67,17 @@ climate:
   - platform: mill_panelheater_gen2
     name: Mill Panel Heater
     uart_id: uart_bus
-    restore_mode: RESTORE
+    uart_id: uart_bus
 ```
 
-`restore_mode` controls the command sent when ESPHome starts. It defaults to `NO_RESTORE`.
+The component creates a Home Assistant select entity named **Mill Panel Heater Restore Mode**. It defaults to `NO_RESTORE`, and the selected policy is stored on the ESP device.
 
-- `NO_RESTORE`: Do not send a power command during startup.
-- `RESTORE`: Restore the last saved climate mode and target temperature, if ESPHome has saved a state.
-- `ALWAYS_OFF`: Send a power-off command during startup.
-- `ALWAYS_ON`: Send a heat-mode power-on command during startup; the heater retains its configured target temperature.
+- `NO_RESTORE`: Do not send a startup command.
+- `RESTORE`: Restore the last saved climate mode and target temperature, when available.
+- `ALWAYS_OFF`: Send an off command after the first valid heater status frame.
+- `ALWAYS_ON`: Send a heat-mode command after the first valid heater status frame; the heater retains its configured target temperature.
 
-ESPHome saves climate state as status frames are received. `RESTORE` can therefore fall back to no startup command if no climate state has previously been saved. Commands are not reflected as confirmed climate state until the heater reports a status frame.
+Startup commands wait until the heater has sent a valid status frame, so the UART link is known to be active. The climate entity continues to report heater-confirmed state. If `RESTORE` has no saved climate state, no startup command is sent.
 
 ## Estimated power sensor
 
