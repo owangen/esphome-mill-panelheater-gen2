@@ -322,7 +322,6 @@ void MillPanelHeaterGen2::start_receive_frame_() {
 }
 
 void MillPanelHeaterGen2::log_frame_(const char *message, uint8_t last_byte) const {
-#ifdef ESPHOME_LOG_HAS_VERBOSE
   std::array<uint8_t, RECEIVE_BUFFER_SIZE + 2> frame{};
   char hex_buffer[format_hex_pretty_size(RECEIVE_BUFFER_SIZE + 2)];
   size_t frame_length = 0;
@@ -333,18 +332,14 @@ void MillPanelHeaterGen2::log_frame_(const char *message, uint8_t last_byte) con
   frame[frame_length++] = last_byte;
 
   if (this->received_length_ > COMMAND_TYPE_POS) {
-    ESP_LOGV(TAG, "%s: bytes=%s, length=%u, payload_length=%u, type=0x%02X, last_byte=0x%02X", message,
+    ESP_LOGD(TAG, "%s: bytes=%s, length=%u, payload_length=%u, type=0x%02X, last_byte=0x%02X", message,
              format_hex_pretty_to(hex_buffer, frame.data(), frame_length, '.'), static_cast<unsigned>(frame_length),
              static_cast<unsigned>(this->received_length_), this->received_data_[COMMAND_TYPE_POS], last_byte);
   } else {
-    ESP_LOGV(TAG, "%s: bytes=%s, length=%u, payload_length=%u, type=unavailable, last_byte=0x%02X", message,
+    ESP_LOGD(TAG, "%s: bytes=%s, length=%u, payload_length=%u, type=unavailable, last_byte=0x%02X", message,
              format_hex_pretty_to(hex_buffer, frame.data(), frame_length, '.'), static_cast<unsigned>(frame_length),
              static_cast<unsigned>(this->received_length_), last_byte);
   }
-#else
-  (void) message;
-  (void) last_byte;
-#endif
 }
 
 climate::ClimateTraits MillPanelHeaterGen2::traits() {
@@ -449,6 +444,9 @@ void MillPanelHeaterGen2::send_command_(std::array<uint8_t, COMMAND_PAYLOAD_SIZE
   }
   frame[COMMAND_PAYLOAD_SIZE + 1] = checksum(payload.data(), payload.size());
   frame[COMMAND_PAYLOAD_SIZE + 2] = END_MARKER;
+  char hex_buffer[format_hex_pretty_size(frame.size())];
+  ESP_LOGD(TAG, "TX frame: bytes=%s, length=%u",
+           format_hex_pretty_to(hex_buffer, frame.data(), frame.size(), '.'), static_cast<unsigned>(frame.size()));
   this->write_array(frame);
 }
 
