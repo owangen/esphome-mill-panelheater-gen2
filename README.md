@@ -71,6 +71,16 @@ climate:
 
 The component creates a Home Assistant select entity named **Mill Panel Heater Restore Mode**. It defaults to `NO_RESTORE`, and the selected policy is stored on the ESP device.
 
+For ESP8266 devices, ESPHome stores preferences in RTC memory by default, which is cleared when power is lost. To make both the selected restore policy and the climate state survive a power outage, enable flash-backed preferences:
+
+```yaml
+esp8266:
+  board: d1_mini  # Use the board configured for your device
+  restore_from_flash: true
+```
+
+Add `restore_from_flash: true` to the existing `esp8266:` block; do not add a second block. Flash-backed preferences have finite write endurance, so ESPHome batches preference writes.
+
 - `NO_RESTORE`: Do not send a startup command.
 - `RESTORE`: Restore the last saved climate mode and target temperature, when available.
 - `ALWAYS_OFF`: Send an off command after the first valid heater status frame.
