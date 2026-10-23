@@ -66,7 +66,7 @@ void MillPanelHeaterGen2::setup() {
 
 RestoreMode RestoreModeSelect::load() {
   static constexpr uint32_t PREFERENCE_VERSION = 0x4D5A0201UL;
-  this->preference_ = this->make_entity_preference<uint8_t>(PREFERENCE_VERSION);
+  this->preference_ = this->make_entity_preference<uint8_t>(PREFERENCE_VERSION, true);
   uint8_t selected = static_cast<uint8_t>(NO_RESTORE);
   if (!this->preference_.load(&selected) || selected > static_cast<uint8_t>(ALWAYS_ON)) {
     selected = static_cast<uint8_t>(NO_RESTORE);
