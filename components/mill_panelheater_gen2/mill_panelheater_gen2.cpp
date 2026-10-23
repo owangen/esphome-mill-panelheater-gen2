@@ -182,16 +182,34 @@ void MillPanelHeaterGen2::loop() {
   this->publish_state();
 
   if (this->startup_command_pending_) {
-    this->startup_command_pending_ = false;
-    auto call = this->make_call();
-    if (this->startup_mode_.has_value()) {
-      call.set_mode(*this->startup_mode_);
+    const bool mode_matches =
+        !this->startup_mode_.has_value() ||
+        (this->mode == *this->startup_mode_);
+    const bool temperature_matches =
+        !this->startup_target_temperature_.has_value() ||
+        (raw_target_temperature == static_cast<uint8_t>(roundf(*this->startup_target_temperature_)));
+
+    if (mode_matches && temperature_matches) {
+      this->startup_command_pending_ = false;
+      ESP_LOGI(TAG, "Startup restore confirmed by heater status");
+    } else if (this->startup_command_attempts_ >= MAX_STARTUP_COMMAND_ATTEMPTS) {
+      this->startup_command_pending_ = false;
+      ESP_LOGW(TAG, "Startup restore was not confirmed after %u command attempts; accepting heater-reported state",
+               static_cast<unsigned>(this->startup_command_attempts_));
+    } else {
+      auto call = this->make_call();
+      if (this->startup_mode_.has_value()) {
+        call.set_mode(*this->startup_mode_);
+      }
+      if (this->startup_target_temperature_.has_value()) {
+        call.set_target_temperature(*this->startup_target_temperature_);
+      }
+      this->startup_command_attempts_++;
+      ESP_LOGI(TAG, "Sending startup restore command (attempt %u/%u); waiting for heater confirmation",
+               static_cast<unsigned>(this->startup_command_attempts_),
+               static_cast<unsigned>(MAX_STARTUP_COMMAND_ATTEMPTS));
+      call.perform();
     }
-    if (this->startup_target_temperature_.has_value()) {
-      call.set_target_temperature(*this->startup_target_temperature_);
-    }
-    ESP_LOGI(TAG, "Sending queued startup restore command after first valid status frame");
-    call.perform();
   }
   // Keep periodic power samples: integration sensors use each source update as an integration timestamp.
   this->publish_power_state_();
