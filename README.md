@@ -79,7 +79,7 @@ esp8266:
   restore_from_flash: true
 ```
 
-Add `restore_from_flash: true` to the existing `esp8266:` block; do not add a second block. Flash-backed preferences have finite write endurance, so ESPHome batches preference writes.
+Add `restore_from_flash: true` to the existing `esp8266:` block; do not add a second block. Flash-backed preferences have finite write endurance. This component forces a sync when the restore policy or climate mode/target is changed, so avoid automations that repeatedly send the same climate command at high frequency.
 
 - `NO_RESTORE`: Do not send a startup command.
 - `RESTORE`: Restore the last saved climate mode and target temperature, when available.
