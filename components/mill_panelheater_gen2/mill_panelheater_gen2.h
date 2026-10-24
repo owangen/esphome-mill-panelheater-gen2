@@ -102,8 +102,13 @@ class MillPanelHeaterGen2 : public climate::Climate, public Component, public ua
   RestoreMode restore_mode_{NO_RESTORE};
   RestoreModeSelect *restore_mode_select_{nullptr};
   bool startup_command_pending_{false};
+  bool startup_command_scheduled_{false};
+  bool startup_command_in_flight_{false};
   uint8_t startup_command_attempts_{0};
   static constexpr uint8_t MAX_STARTUP_COMMAND_ATTEMPTS = 3;
+  static constexpr uint32_t STARTUP_COMMAND_DELAY_MS = 500;
+  static constexpr uint32_t STARTUP_COMMAND_SETTLE_MS = 1500;
+  static constexpr uint32_t TEMPERATURE_COMMAND_DELAY_MS = 300;
   optional<climate::ClimateMode> startup_mode_;
   optional<float> startup_target_temperature_;
 };

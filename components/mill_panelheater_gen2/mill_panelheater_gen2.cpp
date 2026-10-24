@@ -181,7 +181,7 @@ void MillPanelHeaterGen2::loop() {
            LOG_STR_ARG(climate::climate_action_to_string(this->action)));
   this->publish_state();
 
-  if (this->startup_command_pending_) {
+  if (this->startup_command_pending_ && !this->startup_command_in_flight_) {
     const bool mode_matches =
         !this->startup_mode_.has_value() ||
         (this->mode == *this->startup_mode_);
@@ -196,19 +196,32 @@ void MillPanelHeaterGen2::loop() {
       this->startup_command_pending_ = false;
       ESP_LOGW(TAG, "Startup restore was not confirmed after %u command attempts; accepting heater-reported state",
                static_cast<unsigned>(this->startup_command_attempts_));
-    } else {
-      auto call = this->make_call();
-      if (this->startup_mode_.has_value()) {
-        call.set_mode(*this->startup_mode_);
-      }
-      if (this->startup_target_temperature_.has_value()) {
-        call.set_target_temperature(*this->startup_target_temperature_);
-      }
-      this->startup_command_attempts_++;
-      ESP_LOGI(TAG, "Sending startup restore command (attempt %u/%u); waiting for heater confirmation",
-               static_cast<unsigned>(this->startup_command_attempts_),
-               static_cast<unsigned>(MAX_STARTUP_COMMAND_ATTEMPTS));
-      call.perform();
+    } else if (!this->startup_command_scheduled_) {
+      this->startup_command_scheduled_ = true;
+      ESP_LOGI(TAG, "Scheduling startup restore command after heater status frame");
+      this->set_timeout("startup_restore_command", STARTUP_COMMAND_DELAY_MS, [this]() {
+        this->startup_command_scheduled_ = false;
+        if (!this->startup_command_pending_) {
+          return;
+        }
+
+        auto call = this->make_call();
+        if (this->startup_mode_.has_value()) {
+          call.set_mode(*this->startup_mode_);
+        }
+        if (this->startup_target_temperature_.has_value()) {
+          call.set_target_temperature(*this->startup_target_temperature_);
+        }
+        this->startup_command_attempts_++;
+        this->startup_command_in_flight_ = true;
+        ESP_LOGI(TAG, "Sending startup restore command (attempt %u/%u); waiting for heater confirmation",
+                 static_cast<unsigned>(this->startup_command_attempts_),
+                 static_cast<unsigned>(MAX_STARTUP_COMMAND_ATTEMPTS));
+        call.perform();
+        this->set_timeout("startup_restore_verify", STARTUP_COMMAND_SETTLE_MS, [this]() {
+          this->startup_command_in_flight_ = false;
+        });
+      });
     }
   }
   // Keep periodic power samples: integration sensors use each source update as an integration timestamp.
@@ -378,10 +391,12 @@ void MillPanelHeaterGen2::control(const climate::ClimateCall &call) {
   }
 
   bool state_changed = false;
+  bool mode_command_sent = false;
   if (requested_mode.has_value()) {
     switch (*requested_mode) {
       case climate::CLIMATE_MODE_OFF:
         this->send_power_command_(PROTOCOL_MODE_OFF);
+        mode_command_sent = true;
         this->mode = climate::CLIMATE_MODE_OFF;
         this->action = climate::CLIMATE_ACTION_OFF;
         state_changed = true;
@@ -389,6 +404,7 @@ void MillPanelHeaterGen2::control(const climate::ClimateCall &call) {
         break;
       case climate::CLIMATE_MODE_HEAT:
         this->send_power_command_(PROTOCOL_MODE_HEAT);
+        mode_command_sent = true;
         this->mode = climate::CLIMATE_MODE_HEAT;
         this->action = climate::CLIMATE_ACTION_IDLE;
         state_changed = true;
@@ -402,7 +418,14 @@ void MillPanelHeaterGen2::control(const climate::ClimateCall &call) {
 
   if (requested_target_temperature.has_value() && target_temperature_is_valid) {
     const auto temperature = static_cast<uint8_t>(roundf(*requested_target_temperature));
-    this->send_temperature_command_(temperature);
+    if (mode_command_sent) {
+      ESP_LOGD(TAG, "Deferring temperature command by %u ms after mode command",
+               static_cast<unsigned>(TEMPERATURE_COMMAND_DELAY_MS));
+      this->set_timeout("deferred_temperature_command", TEMPERATURE_COMMAND_DELAY_MS,
+                        [this, temperature]() { this->send_temperature_command_(temperature); });
+    } else {
+      this->send_temperature_command_(temperature);
+    }
     this->target_temperature = temperature;
     state_changed = true;
     ESP_LOGD(TAG, "Temperature command sent; awaiting C9 status confirmation");
